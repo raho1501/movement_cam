@@ -2,6 +2,7 @@ import cv2
 import imutils
 import time
 import threading
+import paho.mqtt.client as mqtt
 change_frame = True
 die = False
 class sleeper(threading.Thread):
@@ -27,14 +28,17 @@ def main():
     comp_frame = None #comparison frame (for background)
     t = sleeper()
     t.start()
-
+    publisher = mqtt.Client("MoveCam")
+    broker_address="192.168.1.250"
+    publisher.connect(broker_address, port=40008,keepalive=60)
+    publisher.subscribe("home")
     # Capture frame-by-frame
     ret, frame = cap.read()
     # Our operations on the frame come here
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     gray = cv2.GaussianBlur(gray, (21, 21), 0)
     comp_frame = gray
-
+    hasMovement = False
     while(True):
         # Capture frame-by-frame
         ret, frame = cap.read()
@@ -56,20 +60,25 @@ def main():
         #find contours and grab them
         countours = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
         countours = imutils.grab_contours(countours)
-
+        
         for cnt in countours:
             # if the contour is too small and deemed to be noise, ignore it
             if cv2.contourArea(cnt) < 200:
+                hasMovement= True
                 continue
             # compute the bounding box for the contour, draw it on the frame,
 
             (x, y, w, h) = cv2.boundingRect(cnt)
             cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
-
+        
         # Display the resulting frames
         cv2.imshow('frame',frame)
         cv2.imshow("Threshholds", thresh)
         #cv2.imshow("Frame Delta", frameDelta)
+        if hasMovement:
+            publisher.publish("home","REEEEEEE")
+            hasMovement = False
+            print("published movement")
         #press c to break loop
         if cv2.waitKey(1) & 0xFF == ord('c'):
             die = True
